@@ -77,6 +77,100 @@ describe("security-scan/unsafe-json-in-html — regressions", () => {
     expect(scan(content, "src/seo.tsx").length).toBeGreaterThan(0);
   });
 
+  it("stays silent when JSON-LD escapes less-than signs with replaceAll", () => {
+    const content = `export const Seo = ({ jsonLd }: { jsonLd: object }) => (
+  <script
+    type="application/ld+json"
+    dangerouslySetInnerHTML={{
+      __html: JSON.stringify(jsonLd).replaceAll("<", "\\\\u003c")
+    }}
+  />
+);
+`;
+    expect(scan(content, "src/seo.tsx")).toHaveLength(0);
+  });
+
+  it("stays silent when JSON-LD escapes less-than signs with replace", () => {
+    const content = `export const Seo = ({ jsonLd }: { jsonLd: object }) => (
+  <script
+    type="application/ld+json"
+    dangerouslySetInnerHTML={{
+      __html: JSON.stringify(jsonLd).replace(/</g, "\\\\u003c")
+    }}
+  />
+);
+`;
+    expect(scan(content, "src/seo.tsx")).toHaveLength(0);
+  });
+
+  it("still flags replaceAll when it does not escape less-than signs", () => {
+    const content = `export const Seo = ({ jsonLd }: { jsonLd: object }) => (
+  <script
+    type="application/ld+json"
+    dangerouslySetInnerHTML={{
+      __html: JSON.stringify(jsonLd).replaceAll(">", "\\\\u003e")
+    }}
+  />
+);
+`;
+    expect(scan(content, "src/seo.tsx").length).toBeGreaterThan(0);
+  });
+
+  it("still flags replaceAll when its search value is not a less-than sign", () => {
+    const content = `export const Seo = ({ jsonLd }: { jsonLd: object }) => (
+  <script
+    type="application/ld+json"
+    dangerouslySetInnerHTML={{
+      __html: JSON.stringify(jsonLd).replaceAll(">", "\\\\u003c")
+    }}
+  />
+);
+`;
+    expect(scan(content, "src/seo.tsx").length).toBeGreaterThan(0);
+  });
+
+  it("still flags replaceAll when its replacement contains a raw less-than sign", () => {
+    const content = `export const Seo = ({ jsonLd }: { jsonLd: object }) => (
+  <script
+    type="application/ld+json"
+    dangerouslySetInnerHTML={{
+      __html: JSON.stringify(jsonLd).replaceAll("<", "<")
+    }}
+  />
+);
+`;
+    expect(scan(content, "src/seo.tsx").length).toBeGreaterThan(0);
+  });
+
+  it("still flags when only one JSON.stringify input value is escaped", () => {
+    const content = `export const Seo = ({ jsonLd }: { jsonLd: string }) => (
+  <script
+    type="application/ld+json"
+    dangerouslySetInnerHTML={{
+      __html: JSON.stringify({
+        raw: jsonLd,
+        escaped: jsonLd.replaceAll("<", "\\\\u003c")
+      })
+    }}
+  />
+);
+`;
+    expect(scan(content, "src/seo.tsx").length).toBeGreaterThan(0);
+  });
+
+  it("still flags a similarly named return-value method", () => {
+    const content = `export const Seo = ({ jsonLd }: { jsonLd: object }) => (
+  <script
+    type="application/ld+json"
+    dangerouslySetInnerHTML={{
+      __html: JSON.stringify(jsonLd).replaceAllHtml("<", "\\\\u003c")
+    }}
+  />
+);
+`;
+    expect(scan(content, "src/seo.tsx").length).toBeGreaterThan(0);
+  });
+
   it("still flags a literal argument that mixes in identifiers", () => {
     const content = `export const Seo = ({ title }: { title: string }) => (
   <script

@@ -44,11 +44,15 @@ const isFullyStaticJsonArgument = (argumentText: string): boolean => {
   return !/[A-Za-z_$]/.test(withoutKeywords);
 };
 
-// Only escaping the OUTPUT of JSON.stringify is safe: a `.replace` of `<` on
+// Only escaping the OUTPUT of JSON.stringify is safe: a `.replace` or `.replaceAll` of `<` on
 // its return value, or an escape/serializer helper wrapping the whole call.
 // Escaping the INPUT (a helper inside the stringify arguments) does not, so the
 // return-value check looks strictly after the call's matching `)`.
-const RETURN_ESCAPE_PATTERN = /^[\s)]*\.replace\s*\([^)]*(?:\\u003[cC]|&lt;|<)/;
+const RETURN_REPLACE_ESCAPE_PATTERN = /^[\s)]*\.replace\s*\([^)]*(?:\\u003[cC]|&lt;|<)/;
+// For replaceAll, seeing an escape anywhere in the arguments does not prove that
+// raw less-than signs are removed, so both literal arguments are matched.
+const RETURN_REPLACE_ALL_ESCAPE_PATTERN =
+  /^[\s)]*\.replaceAll\s*\(\s*(["'`])<\1\s*,\s*(["'`])(?:\\\\u003[cC]|&lt;)\2\s*\)/;
 // HTML-escape helpers are trusted even as methods (`utils.escapeHtml(...)`),
 // but the generic serializer names must be bare calls — a `.serialize(...)`
 // method is unrelated to serialize-javascript and may not HTML-escape.
@@ -90,7 +94,7 @@ export const unsafeJsonInHtml = defineRule({
           }
         }
 
-        // A `.replace` of `<` applied to the call's return value escapes it.
+        // A `.replace` or `.replaceAll` of `<` applied to the call's return value escapes it.
         const openParenIndex = match.index + match[0].length - 1;
         const closeParenIndex = findMatchingBracket(content, openParenIndex);
         if (closeParenIndex >= 0) {
@@ -98,7 +102,12 @@ export const unsafeJsonInHtml = defineRule({
             closeParenIndex + 1,
             closeParenIndex + 1 + RETURN_LOOKAHEAD_CHARS,
           );
-          if (RETURN_ESCAPE_PATTERN.test(afterReturn)) continue;
+          if (
+            RETURN_REPLACE_ESCAPE_PATTERN.test(afterReturn) ||
+            RETURN_REPLACE_ALL_ESCAPE_PATTERN.test(afterReturn)
+          ) {
+            continue;
+          }
 
           if (isFullyStaticJsonArgument(content.slice(openParenIndex + 1, closeParenIndex))) {
             continue;
